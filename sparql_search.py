@@ -9,6 +9,7 @@ __date__ = "December 2021"
 __version__ = "0.0.1"
 __email__ = ("xsedla1b@fit.vutbr.cz", "mr.mareksedlacek@gmail.com")
 
+from re import S, search
 import sys
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore
@@ -64,7 +65,7 @@ def get_dbpedia_info(uri, limit=10, offset=0, lang="en"):
         PREFIX pref: <http://xmlns.com/foaf/0.1/>
         PREFIX onto: <http://dbpedia.org/ontology/>
 
-        SELECT ?name ?wiki ?desc
+        SELECT DISTINCT ?name ?wiki ?desc
         WHERE {{
             <{}> pref:isPrimaryTopicOf ?wiki ; pref:name ?name ; onto:abstract ?desc.
             FILTER(LANG(?desc) = "{}")
@@ -73,19 +74,37 @@ def get_dbpedia_info(uri, limit=10, offset=0, lang="en"):
     sparql.setReturnFormat(JSON)
     all_res = sparql.query().convert()["results"]["bindings"]
     if len(all_res) == 0:
-        name = uri[uri.rindex("/")+1:]
-        return (uri, name.replace("_", " "), "", "")
+        return (uri, format_uri(uri), "", "")
     return (uri, all_res[0]["name"]["value"], all_res[0]["desc"]["value"], all_res[0]["wiki"]["value"])
 
 def get_all_triplets(uri, limit=10, offset=0):
     sparql.setQuery("""
-        SELECT *
+        SELECT DISTINCT *
         WHERE {{
             <{}> ?p ?o
         }} LIMIT {} offset {}
     """.format(uri, limit, offset))
+    sparql.setReturnFormat(JSON)
     all_res = sparql.query().convert()["results"]["bindings"]
     return [(uri, x["p"]["value"], x["o"]["value"]) for x in all_res]
+
+def format_uri(uri):
+    name = uri[uri.rindex("/")+1:]
+    name = name.replace("_", " ")
+    name = name.replace("-", " ")
+    name = name.replace("#", ": ")
+    return name
+
+def get_db_all(limit=10, offset=0):
+    sparql.setQuery("""
+        SELECT DISTINCT ?s
+        WHERE {{
+            ?s ?p ?o
+        }} LIMIT {} offset {}
+    """.format(limit, offset))
+    sparql.setReturnFormat(JSON)
+    all_res = sparql.query().convert()["results"]["bindings"]
+    return [(x["s"]["value"], format_uri(x["s"]["value"])) for x in all_res]
 
 def get_wiki_link(uri):
     sparql.setQuery("""
@@ -158,19 +177,53 @@ class MainWindow(QMainWindow):
         self.in_db.currentIndexChanged.connect(self.in_db_changed)
         self.top_layout.addWidget(self.in_db)
 
+        # home button
+        self.home_button = QPushButton("")
+        self.home_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DirHomeIcon))
+        self.home_button.pressed.connect(self.home_pressed)
+        self.top_layout.addWidget(self.home_button)
+
         # Search box
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Search term")
+        self.search_box.setPlaceholderText("Search keywords")
         self.search_box.textChanged.connect(self.search_box_changed)
         self.top_layout.addWidget(self.search_box)
 
         # Search button
         self.search_button = QPushButton("Search")
-        self.search_button.pressed.connect(self.search)
+        self.search_button.pressed.connect(self.search_button_pressed)
         self.search_button.setEnabled(False)
         self.top_layout.addWidget(self.search_button)
 
+        # Page control
+        self.page_layout = QHBoxLayout()
+
+        self.left_button = QPushButton("<")
+        self.left_button.setEnabled(False)
+        self.left_button.pressed.connect(self.left_button_pressed)
+
+        self.page_number = QLabel("page 0") 
+        self.page_number.setStyleSheet(
+                            "QLabel"
+                            "{"
+                            "padding : 10px;"
+                            "}")
+        self.page_number.setAlignment(QtCore.Qt.AlignCenter)
+        self.page_number.adjustSize()
+
+        self.right_button = QPushButton(">")
+        self.right_button.setEnabled(False)
+        self.right_button.pressed.connect(self.right_button_pressed)
+
+        self.page_layout.addWidget(self.left_button)
+        self.page_layout.addWidget(self.page_number)
+        self.page_layout.addWidget(self.right_button)
+
+        self.db_searched = True
+
+        # Add layout
         self._layout.addLayout(self.top_layout)
+        self._layout.addLayout(self.page_layout)
         wid = QtWidgets.QWidget(self)
         self.setCentralWidget(wid)
         wid.setLayout(self._layout)
@@ -180,6 +233,8 @@ class MainWindow(QMainWindow):
         
         self.initUI()
         
+        self.in_db_changed(self.in_db.currentIndex())
+
         self.update()
 
     def initUI(self):
@@ -199,9 +254,30 @@ class MainWindow(QMainWindow):
         else:
             self.search_button.setEnabled(False)
 
-    def result_clicked(self, value):
+    def home_pressed(self):
+        self.search_db_changed(None)
 
-        print(value)
+    def left_button_pressed(self):
+        if self.offset > self.limit:
+            self.offset -= self.limit
+        else:
+            self.offset = 0
+            self.left_button.setEnabled(False)
+        self.right_button.show()
+        if self.db_searched:
+            self.search_db()
+        else:
+            self.search()
+        self.page_number.setText("page "+str(self.offset//self.limit+1))
+
+    def right_button_pressed(self):
+        self.offset += self.limit
+        self.left_button.setEnabled(True)
+        if self.db_searched:
+            self.search_db()
+        else:
+            self.search()
+        self.page_number.setText("page "+str(self.offset//self.limit+1))
 
     def clear_results(self):
         for r in self.results:
@@ -210,10 +286,17 @@ class MainWindow(QMainWindow):
         self._layout = QVBoxLayout()
         self.top_layout = QHBoxLayout()
         self.top_layout.addWidget(self.in_db)
+        self.top_layout.addWidget(self.home_button)
         self.top_layout.addWidget(self.search_box)
         self.top_layout.addWidget(self.search_button)
 
+        self.page_layout = QHBoxLayout()
+        self.page_layout.addWidget(self.left_button)
+        self.page_layout.addWidget(self.page_number)
+        self.page_layout.addWidget(self.right_button)
+
         self._layout.addLayout(self.top_layout)
+        self._layout.addLayout(self.page_layout)
         wid = QtWidgets.QWidget(self)
         self.setCentralWidget(wid)
         wid.setLayout(self._layout)
@@ -222,10 +305,51 @@ class MainWindow(QMainWindow):
         self._layout.addWidget(self.results[0])
         self.update()
 
+    def search_button_pressed(self):
+        self.offset = 0
+        self.db_searched = False
+        self.search()
+
+    def search_db_changed(self, _):
+        self.offset = 0
+        self.db_searched = True
+        self.search_db()
+
+    def search_db(self):
+        print("Searching top DB at ", self.offset)
+        self.clear_results()
+        self.page_number.setText("page "+str(self.offset//self.limit+1))
+        results = get_db_all(self.limit, self.offset)
+        for result in results:
+            d = ResultLabel(result[1], result[0], self)
+            d.setWordWrap(True)
+            d.adjustSize()
+            d.setStyleSheet("QLabel::hover"
+                        "{"
+                        "background-color : #b365f0;"
+                        "}"
+                        "QLabel"
+                        "{"
+                        "padding : 5px;"
+                        "font-size: 15px;"
+                        "font-weight: bold;"
+                        "}")
+            self.results.append(d)
+            self._layout.addWidget(d)
+        if len(results) == self.limit:
+            self.right_button.setEnabled(True)
+        else:
+            self.right_button.setEnabled(False)
+        self.update()
+
     def search(self):
         keyword = self.search_box.text()
         db = self.in_db.currentIndex()
-        print("Searching ", keyword, " in db ", db)
+        print("Searching ", keyword, " in db ", db, " at ", self.offset)
+        self.right_button.show()
+        if self.offset == 0:
+            self.left_button.setEnabled(False)
+        self.page_number.setText("page "+str(self.offset//self.limit+1))
         self.clear_results()
         self.results = []
         if db == 0:
@@ -254,12 +378,29 @@ class MainWindow(QMainWindow):
                             "}")
                 self.results.append(d)
                 self._layout.addWidget(d)
+            if len(results) == self.limit:
+                self.right_button.setEnabled(True)
+            else:
+                self.right_button.setEnabled(False)
         self.update()
+
+    def search_as_keyword(self):
+        self.search_box.setText(self.keyword)
+        self.search_button_pressed()
 
     def more_info(self, uri):
         print("More info ", uri)
+        self.right_button.hide()
+        self.page_number.setText("")
+        self.left_button.setEnabled(True)
+        # Increase offset so left works correctly
+        self.offset += self.limit
         self.clear_results()
         data = get_dbpedia_info(uri)
+        search_button = QPushButton("Search as keyword")
+        self.keyword = data[1]
+        search_button.pressed.connect(self.search_as_keyword)
+        search_button.setFixedSize(150, 30)
         header = data[1]
         body = data[2]
         wiki = "" if len(data[3]) == 0 else "<a href="+data[3]+">Wikipedia</a>"
@@ -274,7 +415,9 @@ class MainWindow(QMainWindow):
                     "font-size: 15px"
                     "}")
         hlabel.adjustSize()
+        self.results.append(search_button)
         self.results.append(hlabel)
+        self._layout.addWidget(search_button)
         self._layout.addWidget(hlabel)
         bodylabel = QLabel(body)
         bodylabel.setWordWrap(True)
@@ -317,6 +460,7 @@ class MainWindow(QMainWindow):
     def in_db_changed(self, v):
         if v == 0:
             sparql = SPARQLWrapper("http://dbpedia.org/sparql")
+        self.search_db_changed(v)
 
 
 if __name__ == "__main__":
