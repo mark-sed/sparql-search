@@ -81,11 +81,11 @@ def get_all_triplets(uri, limit=10, offset=0):
     sparql.setQuery("""
         SELECT *
         WHERE {{
-            <{}> ?a ?o
+            <{}> ?p ?o
         }} LIMIT {} offset {}
     """.format(uri, limit, offset))
     all_res = sparql.query().convert()["results"]["bindings"]
-    return [(uri, x["a"]["value"], x["o"]["value"]) for x in all_res]
+    return [(uri, x["p"]["value"], x["o"]["value"]) for x in all_res]
 
 def get_wiki_link(uri):
     sparql.setQuery("""
@@ -139,7 +139,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, width=1024, height=600):
         super(MainWindow, self).__init__()
-        self.setFixedSize(width, height)
+        #self.setFixedSize(width, height)
         # Center the screen
         screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
         center = QApplication.desktop().screenGeometry(screen).center()
@@ -149,7 +149,6 @@ class MainWindow(QMainWindow):
         # Layout
         self._layout = QVBoxLayout()
         self.top_layout = QHBoxLayout()
-
 
         # UI
         # DB select
@@ -207,7 +206,18 @@ class MainWindow(QMainWindow):
         for r in self.results:
             self._layout.removeWidget(r)
             r.setParent(None)
-        self.results.append(QLabel(""))
+        self._layout = QVBoxLayout()
+        self.top_layout = QHBoxLayout()
+        self.top_layout.addWidget(self.in_db)
+        self.top_layout.addWidget(self.search_box)
+        self.top_layout.addWidget(self.search_button)
+
+        self._layout.addLayout(self.top_layout)
+        wid = QtWidgets.QWidget(self)
+        self.setCentralWidget(wid)
+        wid.setLayout(self._layout)
+
+        self.results = [QLabel("")]
         self._layout.addWidget(self.results[0])
         self.update()
 
@@ -248,7 +258,59 @@ class MainWindow(QMainWindow):
     def more_info(self, uri):
         print("More info ", uri)
         self.clear_results()
-        
+        data = get_dbpedia_info(uri)
+        header = data[1]
+        body = data[2]
+        wiki = "" if len(data[3]) == 0 else "<a href="+data[3]+">Wikipedia</a>"
+        hlabel = QLabel()
+        hlabel.setTextFormat(Qt.RichText)
+        hlabel.setText("<html><h1>"+header+"</h1><br>"+wiki+"</html>")
+        hlabel.setOpenExternalLinks(True)
+        hlabel.setStyleSheet(
+                    "QLabel"
+                    "{"
+                    "padding : 5px;"
+                    "font-size: 15px"
+                    "}")
+        hlabel.adjustSize()
+        self.results.append(hlabel)
+        self._layout.addWidget(hlabel)
+        bodylabel = QLabel(body)
+        bodylabel.setWordWrap(True)
+        bodylabel.setStyleSheet(
+                    "QLabel"
+                    "{"
+                    "padding : 5px;"
+                    "}")
+        bodylabel.adjustSize()
+        self.results.append(bodylabel)
+        self._layout.addWidget(bodylabel)
+        results = get_all_triplets(uri)
+        text = ""
+        for _, p, o in results:
+            if p[:4] == "http":
+                p_form = "<a href="+p+">"+p+"</a>"
+            else:
+                p_form = p
+            if o[:4] == "http":
+                o_form = "<a href="+o+">"+o+"</a>"
+            else:
+                o_form = o
+            text += "<i>in predicate</i> "+p_form+" <i>with</i> "+ o_form + "<br>"
+        d = QLabel()
+        d.setTextFormat(Qt.RichText)
+        d.setText("<html>"+text+"</html>")
+        d.setOpenExternalLinks(True)
+        d.adjustSize()
+        d.setStyleSheet(
+                    "QLabel"
+                    "{"
+                    "padding : 5px;"
+                    "font-size: 15px"
+                    "}")
+        self.results.append(d)
+        self._layout.addWidget(d)
+        self.update()
 
     def in_db_changed(self, v):
         if v == 0:
