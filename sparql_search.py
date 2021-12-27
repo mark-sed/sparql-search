@@ -34,7 +34,6 @@ from PyQt5.QtGui import (QPixmap,
                          QIntValidator)
 
 from SPARQLWrapper import SPARQLWrapper2, SPARQLWrapper, JSON, XML, N3, RDF
-from rdflib import Graph
 
 
 def search_dbpedia(keyword, limit=10, offset=0):
@@ -74,7 +73,8 @@ def get_dbpedia_info(uri, limit=10, offset=0, lang="en"):
     sparql.setReturnFormat(JSON)
     all_res = sparql.query().convert()["results"]["bindings"]
     if len(all_res) == 0:
-        return (uri, uri[uri.rindex("/")+1:], "", "")
+        name = uri[uri.rindex("/")+1:]
+        return (uri, name.replace("_", " "), "", "")
     return (uri, all_res[0]["name"]["value"], all_res[0]["desc"]["value"], all_res[0]["wiki"]["value"])
 
 def get_all_triplets(uri, limit=10, offset=0):
@@ -140,6 +140,7 @@ class MainWindow(QMainWindow):
     def __init__(self, width=1024, height=600):
         super(MainWindow, self).__init__()
         #self.setFixedSize(width, height)
+        self.resize(width, height)
         # Center the screen
         screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
         center = QApplication.desktop().screenGeometry(screen).center()
@@ -298,6 +299,7 @@ class MainWindow(QMainWindow):
                 o_form = o
             text += "<i>in predicate</i> "+p_form+" <i>with</i> "+ o_form + "<br>"
         d = QLabel()
+        d.setWordWrap(True)
         d.setTextFormat(Qt.RichText)
         d.setText("<html>"+text+"</html>")
         d.setOpenExternalLinks(True)
