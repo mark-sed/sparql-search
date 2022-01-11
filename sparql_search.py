@@ -6,7 +6,7 @@ Interactive application for searching through SPARQL databases.
 
 __author__ = "Marek Sedlacek (xsedla1b)"
 __date__ = "December 2021"
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __email__ = ("xsedla1b@fit.vutbr.cz", "mr.mareksedlacek@gmail.com")
 
 from re import S, escape, search
@@ -169,7 +169,7 @@ class ResultLabel(QLabel):
     def mousePressEvent(self, event):
         self.window.more_info(self.uri)
 
-class MainWindow(QMainWindow, QScrollArea):
+class MainWindow(QMainWindow):
     """
     Main application window
     """
@@ -177,6 +177,7 @@ class MainWindow(QMainWindow, QScrollArea):
     def __init__(self, width=1024, height=600):
         super(MainWindow, self).__init__()
         #self.setFixedSize(width, height)
+        self.setWindowTitle("Sparql Search")
         self.resize(width, height)
         # Center the screen
         screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
@@ -215,6 +216,7 @@ class MainWindow(QMainWindow, QScrollArea):
         self.in_db.addItem("UniProt")
         self.in_db.addItem("BioOntology")
         self.in_db.addItem("URIBurner")
+        self.in_db.addItem("NeXtProt")
         self.in_db.currentIndexChanged.connect(self.in_db_changed)
         self.top_layout.addWidget(self.in_db)
 
@@ -538,6 +540,8 @@ class MainWindow(QMainWindow, QScrollArea):
             self.sparql = SPARQLWrapper("http://sparql.bioontology.org")
         elif v == 5:
             self.sparql = SPARQLWrapper("http://uriburner.com/sparql")
+        elif v == 6:
+            self.sparql = SPARQLWrapper("https://api.nextprot.org/sparql")
         else:
             try:
                 self.sparql = SPARQLWrapper(self.in_db.itemText(v))
