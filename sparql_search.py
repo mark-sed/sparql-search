@@ -9,37 +9,30 @@ __date__ = "December 2021"
 __version__ = "1.0.0"
 __email__ = ("xsedla1b@fit.vutbr.cz", "mr.mareksedlacek@gmail.com")
 
-from re import S, escape, search
 import sys
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore
-from PyQt5 import QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QHBoxLayout, QMainWindow,
                              QApplication,
                              QAction,
                              QPushButton,
-                             QFileDialog,
                              QLabel,
                              QLineEdit,
                              QFormLayout,
-                             QSlider, 
-                             QCheckBox,
-                             QProgressBar,
                              QComboBox, QVBoxLayout,
-                             QWidgetAction,
-                             QSizePolicy,
                              QTextBrowser,
                              QMessageBox,
-                             QScrollArea
                              )
-from PyQt5.QtGui import (QPixmap,
-                         QIntValidator)
+from PyQt5.QtGui import QIntValidator
 
 from SPARQLWrapper import SPARQLWrapper, JSON
 
 
 def search_dbpedia(sparql, keyword, limit=10, offset=0, timeout=100000):
+    """
+    Does advanced search in dbpedia
+    """
     sparql.setQuery("""
         define input:ifp "IFP_OFF"  select ?s1 as ?c1, (bif:search_excerpt (bif:vector ('{0}'), ?o1)) as ?c2, ?sc, ?rank, ?g where {{
             {{
@@ -65,6 +58,9 @@ def search_dbpedia(sparql, keyword, limit=10, offset=0, timeout=100000):
     return sparql.query().convert()["results"]["bindings"]
 
 def search_general_db(sparql, keyword, limit=10, offset=0, timeout=10000):
+    """
+    Does a search in general sparql db based on a keyword
+    """
     sparql.setQuery("""
         SELECT DISTINCT ?c1 ?p1 ?o1 WHERE {{
             ?c1 ?p1 ?o1 
@@ -79,6 +75,9 @@ def search_general_db(sparql, keyword, limit=10, offset=0, timeout=10000):
     pass
 
 def get_dbpedia_info(sparql, uri, limit=10, offset=0, lang="en"):
+    """
+    Returns information from db about some uri
+    """
     sparql.setQuery("""
         PREFIX pref: <http://xmlns.com/foaf/0.1/>
         PREFIX onto: <http://dbpedia.org/ontology/>
@@ -96,6 +95,9 @@ def get_dbpedia_info(sparql, uri, limit=10, offset=0, lang="en"):
     return (uri, all_res[0]["name"]["value"], all_res[0]["desc"]["value"], all_res[0]["wiki"]["value"])
 
 def get_all_triplets(sparql, uri, limit=10, offset=0):
+    """
+    Returns all triplets regarding some uri
+    """
     sparql.setQuery("""
         SELECT DISTINCT *
         WHERE {{
@@ -107,6 +109,9 @@ def get_all_triplets(sparql, uri, limit=10, offset=0):
     return [(uri, x["p"]["value"], x["o"]["value"]) for x in all_res]
 
 def format_uri(uri):
+    """
+    Formats uri into human readable form
+    """
     name = uri[uri.rindex("/")+1:]
     name = name.replace("_", " ")
     name = name.replace("-", " ")
@@ -114,6 +119,9 @@ def format_uri(uri):
     return name
 
 def get_db_all(sparql, limit=10, offset=0):
+    """
+    Returns top level data from db
+    """
     sparql.setQuery("""
         SELECT DISTINCT ?s
         WHERE {{
@@ -125,6 +133,9 @@ def get_db_all(sparql, limit=10, offset=0):
     return [(x["s"]["value"], format_uri(x["s"]["value"])) for x in all_res]
 
 def get_wiki_link(sparql, uri):
+    """
+    Returns link a wiki page of some uri
+    """
     sparql.setQuery("""
         PREFIX pref: <http://xmlns.com/foaf/0.1/>
 
@@ -136,6 +147,9 @@ def get_wiki_link(sparql, uri):
     return sparql.query().convert()["results"]["bindings"][0]["wiki"]["value"]
 
 def get_description(sparql, uri, lang="en"):
+    """
+    Returns description of some uri
+    """
     sparql.setQuery("""
         PREFIX pref: <http://dbpedia.org/ontology/>
 
@@ -150,6 +164,9 @@ def get_description(sparql, uri, lang="en"):
             return value["res"]["value"]
 
 def get_name(sparql, uri):
+    """
+    Returns name of some uri
+    """
     sparql.setQuery("""
         PREFIX pref: <http://xmlns.com/foaf/0.1/>
 
@@ -161,6 +178,9 @@ def get_name(sparql, uri):
     return sparql.query().convert()["results"]["bindings"][0]["name"]["value"]
 
 class ResultLabel(QLabel):
+    """
+    Custom label holding results
+    """
     def __init__(self, text, uri, window, parent = None):
         super(ResultLabel, self).__init__(text, parent)
         self.window = window
@@ -176,7 +196,6 @@ class MainWindow(QMainWindow):
 
     def __init__(self, width=1024, height=600):
         super(MainWindow, self).__init__()
-        #self.setFixedSize(width, height)
         self.setWindowTitle("Sparql Search")
         self.resize(width, height)
         # Center the screen
@@ -185,6 +204,7 @@ class MainWindow(QMainWindow):
         self.move(center.x() - self.width() // 2, 
                   center.y() - self.height() // 2)
 
+        # Set default DB
         self.sparql = SPARQLWrapper("http://dbpedia.org/sparql")
 
         # Adding a menu bar
@@ -286,6 +306,9 @@ class MainWindow(QMainWindow):
         self.update()
 
     def initUI(self):
+        """
+        Basic UI initialization
+        """
         self.text_browser = QTextBrowser()
         self.text_browser.setOpenExternalLinks(True)
         self.text_browser.append("")
@@ -312,15 +335,24 @@ class MainWindow(QMainWindow):
         self.about_window.show()
 
     def search_box_changed(self, v):
+        """
+        Handler when search box is updated
+        """
         if len(v) > 0:
             self.search_button.setEnabled(True)
         else:
             self.search_button.setEnabled(False)
 
     def home_pressed(self):
+        """
+        Event handler for home button
+        """
         self.search_db_changed(None)
 
     def left_button_pressed(self):
+        """
+        Event handler for left button
+        """
         if self.offset > self.limit:
             self.offset -= self.limit
         else:
@@ -334,6 +366,9 @@ class MainWindow(QMainWindow):
         self.page_number.setText("page "+str(self.offset//self.limit+1))
 
     def right_button_pressed(self):
+        """
+        Event handler for right button
+        """
         self.offset += self.limit
         self.left_button.setEnabled(True)
         if self.db_searched:
@@ -343,6 +378,9 @@ class MainWindow(QMainWindow):
         self.page_number.setText("page "+str(self.offset//self.limit+1))
 
     def clear_results(self):
+        """
+        Removes all found results
+        """
         for r in self.results:
             self._layout.removeWidget(r)
             r.setParent(None)
@@ -369,16 +407,25 @@ class MainWindow(QMainWindow):
         self.update()
 
     def search_button_pressed(self):
+        """
+        Event handler for search button
+        """
         self.offset = 0
         self.db_searched = False
         self.search()
 
     def search_db_changed(self, _):
+        """
+        Searches top db from the start
+        """
         self.offset = 0
         self.db_searched = True
         self.search_db()
 
     def search_db(self):
+        """
+        Searches top db
+        """
         print("Searching top DB at ", self.offset)
         self.right_button.show()
         self.clear_results()
@@ -407,6 +454,9 @@ class MainWindow(QMainWindow):
         self.update()
 
     def search(self):
+        """
+        Searches db based on keyword
+        """
         keyword = self.search_box.text()
         db = self.in_db.currentIndex()
         print("Searching ", keyword, " in db ", db, " at ", self.offset)
@@ -452,11 +502,17 @@ class MainWindow(QMainWindow):
         QApplication.restoreOverrideCursor()
 
     def search_as_keyword(self):
+        """
+        Searches some uri as a keyword
+        """
         self.search_box.setText(self.keyword)
         self.right_button.show()
         self.search_button_pressed()
 
     def more_info(self, uri):
+        """
+        Displays more info about a uri
+        """
         print("More info ", uri)
         self.right_button.hide()
         self.page_number.setText("")
@@ -528,6 +584,9 @@ class MainWindow(QMainWindow):
         QApplication.restoreOverrideCursor()
 
     def in_db_changed(self, v):
+        """
+        Event handler for when database changes
+        """
         if v == 0:
             self.sparql = SPARQLWrapper("http://dbpedia.org/sparql")
         elif v == 1:
@@ -657,12 +716,18 @@ class Preferences(QMainWindow):
         self.hide()
 
     def changed_timeout_input(self, v):
+        """
+        Event handler for when timeout input is changed
+        """
         try:
             self.parent.timeout = int(v)
         except Exception:
             return
 
     def changed_results_input(self, v):
+        """
+        Event handler for when result amount is changed
+        """
         try:
             self.parent.limit = int(v)
         except Exception:

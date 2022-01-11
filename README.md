@@ -24,6 +24,8 @@ Once Sparql Search is open it displays the top level data which from selected da
 
 Clicking on any item displays additional information, if there are any. Some items might also display description and link to a wiki page about the subject.
 
+Here is a quick demo video: https://youtu.be/l3OAYcpDPDI
+
 ![screenshot](https://i.imgur.com/Tm1a6SS.png)
 
 ![screenshot](https://i.imgur.com/F5JnspE.png)
